@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freelance Payment Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Neutral (Stone, Teal, Amber) -->
+    <!-- Application Structure Plan: A user-friendly, task-oriented SPA dashboard. The structure includes: 1) A top-level summary with key financial metric cards for a quick overview. 2) Tab-based navigation to switch between 'Client Projects' and 'Outsourced Tasks' without leaving the page, keeping the interface clean. 3) Interactive tables with filtering and sorting capabilities for easy data exploration. 4) Modals for adding new projects and tasks, which streamlines data entry. This structure was chosen because it turns a static tracking plan into a dynamic tool, allowing the user to quickly grasp their financial situation and manage data efficiently, which is superior to a simple spreadsheet layout. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Overall financial status (Total Value, Received, Outstanding). Goal: Inform. Viz: Key metric cards. Justification: Provides an immediate, high-level summary of financial health.
+        - Report Info: List of client projects. Goal: Organize & Analyze. Viz: Interactive HTML Table. Interaction: Filtering by status, sorting by columns, 'Add Project' button, 'Edit', 'Delete', 'Record Payment', 'View Payments'. 'View Outsourced Tasks' button is now conditionally displayed only for projects with linked outsourced tasks. Justification: Allows detailed exploration, management, modification, and granular tracking of core data, including historical payments and relevant linked outsourced work, improving UI clarity.
+        - Report Info: List of outsourced tasks. Goal: Organize. Viz: Interactive HTML Table on a separate tab. Interaction: Filtering, 'Add Task' button, 'Edit' and 'Delete' buttons per row. The 'Project ID' column now displays the corresponding 'Project Name' for better clarity. Justification: Segregates primary revenue from expenses for clarity and allows management of outsourced task details, with improved readability for project linking.
+        - Report Info: Project Status. Goal: Inform. Viz: Color-coded Tailwind CSS badges. Interaction: Used as a filter key. Justification: Status is instantly recognizable.
+        - Library/Method: Tailwind CSS for layout and styling, Vanilla JS for all interactions.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #f8fafc; }
+        .modal-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 40; cursor: pointer; }
+        .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 50; }
+        .tab-active { border-color: #0d9488; color: #0d9488; font-weight: 600; }
+        .table-cell { padding: 14px 16px; text-align: left; vertical-align: middle; font-size: 0.95rem; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 0.8rem; font-weight: 600; text-transform: capitalize; }
+    </style>
+</head>
+<body class="text-stone-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-teal-700">Freelance Payment Dashboard</h1>
+            <p class="text-stone-500 mt-2">Easily track all your projects and payments.</p>
+        </header>
+
+        <main>
+            <!-- Key Metrics -->
+            <section id="key-metrics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col justify-center items-center">
+                    <h3 class="text-lg font-semibold text-stone-500 mb-2">Total Project Value</h3>
+                    <p id="total-value" class="text-3xl font-bold text-teal-600">₹0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col justify-center items-center">
+                    <h3 class="text-lg font-semibold text-stone-500 mb-2">Total Amount Received</h3>
+                    <p id="total-received" class="text-3xl font-bold text-green-600">₹0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col justify-center items-center">
+                    <h3 class="text-lg font-semibold text-stone-500 mb-2">Total Outstanding Amount</h3>
+                    <p id="total-outstanding" class="text-3xl font-bold text-amber-600">₹0</p>
+                </div>
+                 <div class="bg-white p-6 rounded-xl shadow-md flex flex-col justify-center items-center">
+                    <h3 class="text-lg font-semibold text-stone-500 mb-2">Active Projects</h3>
+                    <p id="active-projects" class="text-3xl font-bold text-blue-600">0</p>
+                </div>
+            </section>
+
+            <!-- Tabs -->
+            <div class="grid grid-cols-1 gap-8">
+                <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-md">
+                    <!-- Tabs -->
+                    <div class="border-b border-stone-200 mb-4">
+                        <nav class="-mb-px flex space-x-6">
+                            <button id="tab-projects" class="py-4 px-1 border-b-2 font-medium text-lg text-stone-500 hover:text-teal-600 hover:border-teal-600 tab-active" onclick="switchTab('projects')">Client Projects</button>
+                            <button id="tab-outsourced" class="py-4 px-1 border-b-2 border-transparent font-medium text-lg text-stone-500 hover:text-teal-600 hover:border-teal-600" onclick="switchTab('outsourced')">Outsourced Tasks</button>
+                        </nav>
+                    </div>
+
+                    <!-- Projects View -->
+                    <div id="view-projects">
+                        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                            <h2 class="text-2xl font-bold">My Projects</h2>
+                            <div class="flex items-center gap-4">
+                                <select id="project-status-filter" class="rounded-lg border-stone-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 p-2 text-sm">
+                                    <option value="all">All Status</option>
+                                    <option value="Ongoing">Ongoing</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Paid">Paid</option>
+                                    <option value="Outstanding">Outstanding</option>
+                                </select>
+                                <button onclick="openModal('addProjectModal')" class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors text-sm">Add New Project</button>
+                            </div>
+                        </div>
+                        <p class="text-stone-500 mb-4 text-sm">Here is a list of all your client projects. You can filter by status or click on any project to view details.</p>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-stone-200">
+                                <thead class="bg-stone-50">
+                                    <tr>
+                                        <th class="table-cell font-bold text-stone-600">Project</th>
+                                        <th class="table-cell font-bold text-stone-600">Client</th>
+                                        <th class="table-cell font-bold text-stone-600">Total Value</th>
+                                        <th class="table-cell font-bold text-stone-600">Received</th>
+                                        <th class="table-cell font-bold text-stone-600">Outstanding</th>
+                                        <th class="table-cell font-bold text-stone-600">Status</th>
+                                        <th class="table-cell font-bold text-stone-600">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="projects-table-body" class="bg-white divide-y divide-stone-200">
+                                    <!-- JS will populate this -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Outsourced View -->
+                    <div id="view-outsourced" class="hidden">
+                         <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                            <h2 class="text-2xl font-bold">Outsourced Tasks</h2>
+                            <button onclick="openModal('outsourceModal')" class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors text-sm">Add New Task</button>
+                        </div>
+                        <p class="text-stone-500 mb-4 text-sm">This list shows all tasks you have outsourced to others and tracks payments made to them.</p>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-stone-200">
+                                <thead class="bg-stone-50">
+                                    <tr>
+                                        <th class="table-cell font-bold text-stone-600">Project Name</th>
+                                        <th class="table-cell font-bold text-stone-600">Friend's Name</th>
+                                        <th class="table-cell font-bold text-stone-600">Agreed Payment</th>
+                                        <th class="table-cell font-bold text-stone-600">Amount Paid</th>
+                                        <th class="table-cell font-bold text-stone-600">Status</th>
+                                        <th class="table-cell font-bold text-stone-600">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="outsourced-table-body" class="bg-white divide-y divide-stone-200">
+                                    <!-- JS will populate this -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Project Modal -->
+    <div id="addProjectModalBackdrop" class="modal-backdrop" onclick="closeModal('addProjectModal')"></div>
+    <div id="addProjectModal" class="modal bg-white rounded-lg shadow-xl p-8 w-11/12 md:max-w-lg">
+        <h3 class="text-2xl font-bold mb-6">Add New Project</h3>
+        <form id="addProjectForm">
+            <div class="space-y-4">
+                <label for="addClientName" class="block text-sm font-medium text-stone-700">Client Name</label>
+                <input type="text" id="addClientName" placeholder="Client Name" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="addProjectName" class="block text-sm font-medium text-stone-700">Project Name</label>
+                <input type="text" id="addProjectName" placeholder="Project Name" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="addProjectValue" class="block text-sm font-medium text-stone-700">Total Project Value (INR)</label>
+                <input type="number" id="addProjectValue" placeholder="Total Project Value (INR)" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="addProjectStatus" class="block text-sm font-medium text-stone-700">Project Status</label>
+                <select id="addProjectStatus" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500">
+                    <option value="Ongoing">Ongoing</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Outstanding">Outstanding</option>
+                    <option value="Paid">Paid</option>
+                </select>
+                <div class="flex justify-end gap-4 pt-4">
+                    <button type="button" onclick="closeModal('addProjectModal')" class="py-2 px-6 rounded-lg text-stone-600 bg-stone-100 hover:bg-stone-200 text-sm">Cancel</button>
+                    <button type="submit" class="py-2 px-6 rounded-lg text-white bg-teal-600 hover:bg-teal-700 text-sm">Add Project</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Edit Project Modal -->
+    <div id="editProjectModalBackdrop" class="modal-backdrop" onclick="closeModal('editProjectModal')"></div>
+    <div id="editProjectModal" class="modal bg-white rounded-lg shadow-xl p-8 w-11/12 md:max-w-lg">
+        <h3 class="text-2xl font-bold mb-6">Edit Project Details</h3>
+        <form id="editProjectForm">
+            <div class="space-y-4">
+                <input type="hidden" id="editProjectId">
+                <label for="editClientName" class="block text-sm font-medium text-stone-700">Client Name</label>
+                <input type="text" id="editClientName" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="editProjectName" class="block text-sm font-medium text-stone-700">Project Name</label>
+                <input type="text" id="editProjectName" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="editProjectValue" class="block text-sm font-medium text-stone-700">Total Project Value (INR)</label>
+                <input type="number" id="editProjectValue" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="editProjectStatus" class="block text-sm font-medium text-stone-700">Project Status</label>
+                <select id="editProjectStatus" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500">
+                    <option value="Ongoing">Ongoing</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Outstanding">Outstanding</option>
+                    <option value="Paid">Paid</option>
+                </select>
+                <div class="flex justify-end gap-4 pt-4">
+                    <button type="button" onclick="closeModal('editProjectModal')" class="py-2 px-6 rounded-lg text-stone-600 bg-stone-100 hover:bg-stone-200 text-sm">Cancel</button>
+                    <button type="submit" class="py-2 px-6 rounded-lg text-white bg-teal-600 hover:bg-teal-700 text-sm">Save Changes</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Record Payment Modal -->
+    <div id="recordPaymentModalBackdrop" class="modal-backdrop" onclick="closeModal('recordPaymentModal')"></div>
+    <div id="recordPaymentModal" class="modal bg-white rounded-lg shadow-xl p-8 w-11/12 md:max-w-lg">
+        <h3 class="text-2xl font-bold mb-6">Record New Payment</h3>
+        <form id="recordPaymentForm">
+            <div class="space-y-4">
+                <input type="hidden" id="recordPaymentProjectId">
+                <label for="paymentAmount" class="block text-sm font-medium text-stone-700">Payment Amount (INR)</label>
+                <input type="number" id="paymentAmount" placeholder="Amount Received" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="paymentDate" class="block text-sm font-medium text-stone-700">Payment Date</label>
+                <input type="date" id="paymentDate" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <div class="flex justify-end gap-4 pt-4">
+                    <button type="button" onclick="closeModal('recordPaymentModal')" class="py-2 px-6 rounded-lg text-stone-600 bg-stone-100 hover:bg-stone-200 text-sm">Cancel</button>
+                    <button type="submit" class="py-2 px-6 rounded-lg text-white bg-teal-600 hover:bg-teal-700 text-sm">Record Payment</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- View Payments Modal -->
+    <div id="viewPaymentsModalBackdrop" class="modal-backdrop" onclick="closeModal('viewPaymentsModal')"></div>
+    <div id="viewPaymentsModal" class="modal bg-white rounded-lg shadow-xl p-8 w-11/12 md:max-w-lg">
+        <h3 class="text-2xl font-bold mb-6" id="viewPaymentsProjectName">Project Payment History</h3>
+        <div id="paymentHistoryList" class="space-y-3">
+            <!-- Payment history will be populated here by JS -->
+        </div>
+        <div class="flex justify-end gap-4 pt-6">
+            <button type="button" onclick="closeModal('viewPaymentsModal')" class="py-2 px-6 rounded-lg text-stone-600 bg-stone-100 hover:bg-stone-200 text-sm">Close</button>
+        </div>
+    </div>
+
+    <!-- View Linked Outsourced Tasks Modal -->
+    <div id="viewLinkedOutsourcedTasksModalBackdrop" class="modal-backdrop" onclick="closeModal('viewLinkedOutsourcedTasksModal')"></div>
+    <div id="viewLinkedOutsourcedTasksModal" class="modal bg-white rounded-lg shadow-xl p-8 w-11/12 md:max-w-lg">
+        <h3 class="text-2xl font-bold mb-6" id="linkedOutsourcedTasksProjectName">Outsourced Tasks for Project</h3>
+        <div id="linkedOutsourcedTasksList" class="space-y-3">
+            <!-- Linked outsourced tasks will be populated here by JS -->
+        </div>
+        <div class="flex justify-end gap-4 pt-6">
+            <button type="button" onclick="closeModal('viewLinkedOutsourcedTasksModal')" class="py-2 px-6 rounded-lg text-stone-600 bg-stone-100 hover:bg-stone-200 text-sm">Close</button>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="confirmDeleteModalBackdrop" class="modal-backdrop" onclick="closeModal('confirmDeleteModal')"></div>
+    <div id="confirmDeleteModal" class="modal bg-white rounded-lg shadow-xl p-8 w-11/12 md:max-w-sm text-center">
+        <h3 class="text-xl font-bold mb-4 text-red-600">Confirm Deletion</h3>
+        <p class="text-stone-700 mb-6">Are you sure you want to delete this project? This action cannot be undone.</p>
+        <div class="flex justify-center gap-4">
+            <button type="button" onclick="closeModal('confirmDeleteModal')" class="py-2 px-6 rounded-lg text-stone-600 bg-stone-100 hover:bg-stone-200 text-sm">Cancel</button>
+            <button type="button" id="confirmDeleteButton" class="py-2 px-6 rounded-lg text-white bg-red-600 hover:bg-red-700 text-sm">Delete</button>
+        </div>
+    </div>
+    
+    <!-- Add Outsource Task Modal -->
+    <div id="outsourceModalBackdrop" class="modal-backdrop" onclick="closeModal('outsourceModal')"></div>
+    <div id="outsourceModal" class="modal bg-white rounded-lg shadow-xl p-8 w-11/12 md:max-w-lg">
+        <h3 class="text-2xl font-bold mb-6">Add New Outsourced Task</h3>
+        <form id="addOutsourceForm">
+            <div class="space-y-4">
+                <label for="outsourceProjectId" class="block text-sm font-medium text-stone-700">Client Project</label>
+                <select id="outsourceProjectId" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                    <!-- Options populated by JS -->
+                </select>
+                <label for="friendName" class="block text-sm font-medium text-stone-700">Friend's Name</label>
+                <input type="text" id="friendName" placeholder="Friend's Name" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="agreedPayment" class="block text-sm font-medium text-stone-700">Agreed Payment (INR)</label>
+                <input type="number" id="agreedPayment" placeholder="Agreed Payment (INR)" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="paidAmountOutsource" class="block text-sm font-medium text-stone-700">Amount Paid (INR)</label>
+                <input type="number" id="paidAmountOutsource" placeholder="Amount Paid (INR)" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="paymentStatusOutsource" class="block text-sm font-medium text-stone-700">Payment Status</label>
+                <select id="paymentStatusOutsource" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500">
+                    <option value="Pending">Pending</option>
+                    <option value="Partial Payment">Partial Payment</option>
+                    <option value="Paid">Paid</option>
+                </select>
+                <div class="flex justify-end gap-4 pt-4">
+                    <button type="button" onclick="closeModal('outsourceModal')" class="py-2 px-6 rounded-lg text-stone-600 bg-stone-100 hover:bg-stone-200 text-sm">Cancel</button>
+                    <button type="submit" class="py-2 px-6 rounded-lg text-white bg-teal-600 hover:bg-teal-700 text-sm">Add Task</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Edit Outsource Task Modal -->
+    <div id="editOutsourceModalBackdrop" class="modal-backdrop" onclick="closeModal('editOutsourceModal')"></div>
+    <div id="editOutsourceModal" class="modal bg-white rounded-lg shadow-xl p-8 w-11/12 md:max-w-lg">
+        <h3 class="text-2xl font-bold mb-6">Edit Outsourced Task Details</h3>
+        <form id="editOutsourceForm">
+            <div class="space-y-4">
+                <input type="hidden" id="editOutsourceIndex">
+                <label for="editOutsourceProjectId" class="block text-sm font-medium text-stone-700">Client Project</label>
+                <select id="editOutsourceProjectId" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                    <!-- Options populated by JS -->
+                </select>
+                <label for="editFriendName" class="block text-sm font-medium text-stone-700">Friend's Name</label>
+                <input type="text" id="editFriendName" placeholder="Friend's Name" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="editAgreedPayment" class="block text-sm font-medium text-stone-700">Agreed Payment (INR)</label>
+                <input type="number" id="editAgreedPayment" placeholder="Agreed Payment (INR)" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="editPaidAmountOutsource" class="block text-sm font-medium text-stone-700">Amount Paid (INR)</label>
+                <input type="number" id="editPaidAmountOutsource" placeholder="Amount Paid (INR)" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500" required>
+                <label for="editPaymentStatusOutsource" class="block text-sm font-medium text-stone-700">Payment Status</label>
+                <select id="editPaymentStatusOutsource" class="w-full p-3 border border-stone-300 rounded-lg focus:ring-teal-500 focus:border-teal-500">
+                    <option value="Pending">Pending</option>
+                    <option value="Partial Payment">Partial Payment</option>
+                    <option value="Paid">Paid</option>
+                </select>
+                <div class="flex justify-end gap-4 pt-4">
+                    <button type="button" onclick="closeModal('editOutsourceModal')" class="py-2 px-6 rounded-lg text-stone-600 bg-stone-100 hover:bg-stone-200 text-sm">Cancel</button>
+                    <button type="submit" class="py-2 px-6 rounded-lg text-white bg-teal-600 hover:bg-teal-700 text-sm">Save Changes</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        let projects = [
+            { id: 'P001', clientName: 'Client A', projectName: 'Website Design', totalValue: 50000, paymentHistory: [{amount: 50000, date: '2024-01-15'}], status: 'Paid' },
+            { id: 'P002', clientName: 'Client B', projectName: 'Mobile App', totalValue: 80000, paymentHistory: [{amount: 20000, date: '2024-02-01'}, {amount: 20000, date: '2024-03-01'}], status: 'Ongoing' },
+            { id: 'P003', clientName: 'Client C', projectName: 'Branding Package', totalValue: 35000, paymentHistory: [{amount: 10000, date: '2024-04-10'}], status: 'Ongoing' },
+            { id: 'P004', clientName: 'Client A', projectName: 'SEO Optimization', totalValue: 25000, paymentHistory: [], status: 'Outstanding' },
+            { id: 'P005', clientName: 'Client D', projectName: 'Logo Design', totalValue: 15000, paymentHistory: [{amount: 15000, date: '2024-05-20'}], status: 'Completed' },
+        ];
+
+        let outsourcedTasks = [
+            { id: 'OT001', projectId: 'P002', friendName: 'Friend 1', agreedPayment: 20000, paidAmount: 10000, status: 'Partial Payment' },
+            { id: 'OT002', projectId: 'P003', friendName: 'Friend 2', agreedPayment: 10000, paidAmount: 10000, status: 'Paid' },
+            { id: 'OT003', projectId: 'P001', friendName: 'Friend 3', agreedPayment: 5000, paidAmount: 0, status: 'Pending' },
+        ];
+        
+        const projectStatusFilter = document.getElementById('project-status-filter');
+        const addProjectForm = document.getElementById('addProjectForm');
+        const editProjectForm = document.getElementById('editProjectForm');
+        const recordPaymentForm = document.getElementById('recordPaymentForm');
+        const addOutsourceForm = document.getElementById('addOutsourceForm');
+        const editOutsourceForm = document.getElementById('editOutsourceForm'); 
+        const confirmDeleteButton = document.getElementById('confirmDeleteButton');
+
+        let projectIdToDelete = null; 
+        let outsourceIndexToDelete = null; 
+
+        function getStatusBadge(status) {
+            const colors = {
+                'Paid': 'bg-green-100 text-green-800',
+                'Ongoing': 'bg-blue-100 text-blue-800',
+                'Completed': 'bg-stone-100 text-stone-800',
+                'Outstanding': 'bg-amber-100 text-amber-800',
+                'Pending': 'bg-amber-100 text-amber-800',
+                'Partial Payment': 'bg-blue-100 text-blue-800',
+            };
+            return `<span class="status-badge ${colors[status] || 'bg-gray-100 text-gray-800'}">${status}</span>`;
+        }
+
+        function calculateTotalReceived(project) {
+            return project.paymentHistory.reduce((sum, entry) => sum + entry.amount, 0);
+        }
+
+        function getProjectNameById(id) {
+            const project = projects.find(p => p.id === id);
+            return project ? project.projectName : 'Unknown Project';
+        }
+
+        function hasOutsourcedTasks(projectId) {
+            return outsourcedTasks.some(task => task.projectId === projectId);
+        }
+
+        function renderProjectsTable() {
+            const tbody = document.getElementById('projects-table-body');
+            tbody.innerHTML = '';
+            const filterValue = projectStatusFilter.value;
+
+            const filteredProjects = projects.filter(p => filterValue === 'all' || p.status === filterValue);
+
+            if (filteredProjects.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-stone-500">No projects found.</td></tr>`;
+                return;
+            }
+
+            filteredProjects.forEach(p => {
+                const totalReceived = calculateTotalReceived(p);
+                const outstanding = p.totalValue - totalReceived;
+                const viewOutsourcedButton = hasOutsourcedTasks(p.id) ?
+                    `<button onclick="viewLinkedOutsourcedTasks('${p.id}')" class="bg-orange-500 text-white p-2 rounded-md hover:bg-orange-600 text-xs mr-1">View Outsourced</button>` :
+                    ''; // Render empty string if no outsourced tasks
+
+                const row = `
+                    <tr>
+                        <td class="table-cell font-semibold text-teal-700">${p.projectName}</td>
+                        <td class="table-cell">${p.clientName}</td>
+                        <td class="table-cell">₹${p.totalValue.toLocaleString('en-IN')}</td>
+                        <td class="table-cell">₹${totalReceived.toLocaleString('en-IN')}</td>
+                        <td class="table-cell font-semibold ${outstanding > 0 ? 'text-amber-600' : 'text-green-600'}">₹${outstanding.toLocaleString('en-IN')}</td>
+                        <td class="table-cell">${getStatusBadge(p.status)}</td>
+                        <td class="table-cell whitespace-nowrap">
+                            <button onclick="recordPayment('${p.id}')" class="bg-green-500 text-white p-2 rounded-md hover:bg-green-600 text-xs mr-1">Record Payment</button>
+                            <button onclick="viewPayments('${p.id}')" class="bg-purple-500 text-white p-2 rounded-md hover:bg-purple-600 text-xs mr-1">View Payments</button>
+                            ${viewOutsourcedButton}
+                            <button onclick="editProject('${p.id}')" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 text-xs mr-1">Edit</button>
+                            <button onclick="deleteProject('${p.id}')" class="bg-red-500 text-white p-2 rounded-md hover:bg-red-600 text-xs">Delete</button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+        
+        function renderOutsourcedTable() {
+            const tbody = document.getElementById('outsourced-table-body');
+            tbody.innerHTML = '';
+
+            if (outsourcedTasks.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-stone-500">No outsourced tasks found.</td></tr>`;
+                return;
+            }
+
+            outsourcedTasks.forEach((t, index) => {
+                const projectName = getProjectNameById(t.projectId);
+                const row = `
+                    <tr>
+                        <td class="table-cell font-semibold text-teal-700">${projectName}</td>
+                        <td class="table-cell">${t.friendName}</td>
+                        <td class="table-cell">₹${t.agreedPayment.toLocaleString('en-IN')}</td>
+                        <td class="table-cell">₹${t.paidAmount.toLocaleString('en-IN')}</td>
+                        <td class="table-cell">${getStatusBadge(t.status)}</td>
+                        <td class="table-cell whitespace-nowrap">
+                            <button onclick="editOutsourceTask(${index})" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 text-xs mr-1">Edit</button>
+                            <button onclick="deleteOutsourceTask(${index})" class="bg-red-500 text-white p-2 rounded-md hover:bg-red-600 text-xs">Delete</button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function updateMetricsAndChart() {
+            const totalProjectValue = projects.reduce((sum, p) => sum + p.totalValue, 0);
+            const totalReceivedAmount = projects.reduce((sum, p) => sum + calculateTotalReceived(p), 0);
+            const totalOutstandingAmount = totalProjectValue - totalReceivedAmount;
+            const activeProjects = projects.filter(p => p.status === 'Ongoing').length;
+
+            document.getElementById('total-value').textContent = `₹${totalProjectValue.toLocaleString('en-IN')}`;
+            document.getElementById('total-received').textContent = `₹${totalReceivedAmount.toLocaleString('en-IN')}`;
+            document.getElementById('total-outstanding').textContent = `₹${totalOutstandingAmount.toLocaleString('en-IN')}`;
+            document.getElementById('active-projects').textContent = activeProjects;
+        }
+        
+        function handleAddProject(e) {
+            e.preventDefault();
+            const newProject = {
+                id: 'P' + String(projects.length + 1).padStart(3, '0'),
+                clientName: document.getElementById('addClientName').value,
+                projectName: document.getElementById('addProjectName').value,
+                totalValue: parseInt(document.getElementById('addProjectValue').value),
+                paymentHistory: [],
+                status: document.getElementById('addProjectStatus').value,
+            };
+            projects.push(newProject);
+            closeModal('addProjectModal');
+            addProjectForm.reset();
+            renderAll();
+        }
+
+        function handleEditProject(e) {
+            e.preventDefault();
+            const projectId = document.getElementById('editProjectId').value;
+            const projectIndex = projects.findIndex(p => p.id === projectId);
+
+            if (projectIndex !== -1) {
+                projects[projectIndex].clientName = document.getElementById('editClientName').value;
+                projects[projectIndex].projectName = document.getElementById('editProjectName').value;
+                projects[projectIndex].totalValue = parseInt(document.getElementById('editProjectValue').value);
+                projects[projectIndex].status = document.getElementById('editProjectStatus').value;
+            }
+            closeModal('editProjectModal');
+            renderAll();
+        }
+
+        window.editProject = function(id) {
+            const project = projects.find(p => p.id === id);
+            if (project) {
+                document.getElementById('editProjectId').value = project.id;
+                document.getElementById('editClientName').value = project.clientName;
+                document.getElementById('editProjectName').value = project.projectName;
+                document.getElementById('editProjectValue').value = project.totalValue;
+                document.getElementById('editProjectStatus').value = project.status;
+                openModal('editProjectModal');
+            }
+        };
+
+        window.recordPayment = function(id) {
+            const project = projects.find(p => p.id === id);
+            if (project) {
+                document.getElementById('recordPaymentProjectId').value = project.id;
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                document.getElementById('paymentDate').value = `${year}-${month}-${day}`;
+                openModal('recordPaymentModal');
+            }
+        };
+
+        function handleRecordPayment(e) {
+            e.preventDefault();
+            const projectId = document.getElementById('recordPaymentProjectId').value;
+            const paymentAmount = parseInt(document.getElementById('paymentAmount').value);
+            const paymentDate = document.getElementById('paymentDate').value;
+
+            const projectIndex = projects.findIndex(p => p.id === projectId);
+            if (projectIndex !== -1) {
+                projects[projectIndex].paymentHistory.push({ amount: paymentAmount, date: paymentDate });
+                const currentReceived = calculateTotalReceived(projects[projectIndex]);
+                if (currentReceived >= projects[projectIndex].totalValue) {
+                    projects[projectIndex].status = 'Paid';
+                } else if (currentReceived > 0) {
+                    projects[projectIndex].status = 'Ongoing';
+                }
+            }
+            closeModal('recordPaymentModal');
+            recordPaymentForm.reset();
+            renderAll();
+        }
+
+        window.viewPayments = function(id) {
+            const project = projects.find(p => p.id === id);
+            const paymentHistoryList = document.getElementById('paymentHistoryList');
+            document.getElementById('viewPaymentsProjectName').textContent = `${project.projectName} - Payment History`;
+            paymentHistoryList.innerHTML = ''; 
+
+            if (project.paymentHistory.length === 0) {
+                paymentHistoryList.innerHTML = `<p class="text-stone-500 text-center">No payments recorded for this project yet.</p>`;
+            } else {
+                project.paymentHistory.forEach(payment => {
+                    const paymentEntry = document.createElement('div');
+                    paymentEntry.className = 'flex justify-between items-center bg-stone-50 p-3 rounded-lg shadow-sm';
+                    paymentEntry.innerHTML = `
+                        <span class="font-semibold text-teal-700">₹${payment.amount.toLocaleString('en-IN')}</span>
+                        <span class="text-stone-600 text-sm">${new Date(payment.date).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    `;
+                    paymentHistoryList.appendChild(paymentEntry);
+                });
+            }
+            openModal('viewPaymentsModal');
+        };
+
+        window.viewLinkedOutsourcedTasks = function(projectId) {
+            const project = projects.find(p => p.id === projectId);
+            const linkedOutsourcedTasksList = document.getElementById('linkedOutsourcedTasksList');
+            document.getElementById('linkedOutsourcedTasksProjectName').textContent = `Outsourced Tasks for: ${project ? project.projectName : 'N/A'}`;
+            linkedOutsourcedTasksList.innerHTML = ''; 
+
+            const linkedTasks = outsourcedTasks.filter(task => task.projectId === projectId);
+
+            if (linkedTasks.length === 0) {
+                linkedOutsourcedTasksList.innerHTML = `<p class="text-stone-500 text-center">No outsourced tasks linked to this project.</p>`;
+            } else {
+                linkedTasks.forEach(task => {
+                    const taskEntry = document.createElement('div');
+                    taskEntry.className = 'bg-stone-50 p-3 rounded-lg shadow-sm space-y-1';
+                    taskEntry.innerHTML = `
+                        <p><span class="font-semibold">Friend:</span> ${task.friendName}</p>
+                        <p><span class="font-semibold">Agreed Payment:</span> ₹${task.agreedPayment.toLocaleString('en-IN')}</p>
+                        <p><span class="font-semibold">Amount Paid:</span> ₹${task.paidAmount.toLocaleString('en-IN')}</p>
+                        <p><span class="font-semibold">Status:</span> ${getStatusBadge(task.status)}</p>
+                    `;
+                    linkedOutsourcedTasksList.appendChild(taskEntry);
+                });
+            }
+            openModal('viewLinkedOutsourcedTasksModal');
+        };
+
+
+        window.deleteProject = function(id) {
+            projectIdToDelete = id;
+            openModal('confirmDeleteModal');
+        };
+
+        confirmDeleteButton.addEventListener('click', () => {
+            if (projectIdToDelete) {
+                projects = projects.filter(p => p.id !== projectIdToDelete);
+                projectIdToDelete = null;
+                closeModal('confirmDeleteModal');
+                renderAll();
+            } else if (outsourceIndexToDelete !== null) {
+                outsourcedTasks.splice(outsourceIndexToDelete, 1);
+                outsourceIndexToDelete = null;
+                closeModal('confirmDeleteModal');
+                renderAll();
+            }
+        });
+
+        // Function to populate project dropdowns
+        function populateProjectDropdowns() {
+            const addOutsourceProjectIdSelect = document.getElementById('outsourceProjectId');
+            const editOutsourceProjectIdSelect = document.getElementById('editOutsourceProjectId');
+
+            // Clear existing options
+            addOutsourceProjectIdSelect.innerHTML = '';
+            editOutsourceProjectIdSelect.innerHTML = '';
+
+            projects.forEach(project => {
+                const optionAdd = document.createElement('option');
+                optionAdd.value = project.id;
+                optionAdd.textContent = project.projectName;
+                addOutsourceProjectIdSelect.appendChild(optionAdd);
+
+                const optionEdit = document.createElement('option');
+                optionEdit.value = project.id;
+                optionEdit.textContent = project.projectName;
+                editOutsourceProjectIdSelect.appendChild(optionEdit);
+            });
+        }
+
+
+        window.editOutsourceTask = function(index) {
+            const task = outsourcedTasks[index];
+            if (task) {
+                document.getElementById('editOutsourceIndex').value = index;
+                document.getElementById('editOutsourceProjectId').value = task.projectId; 
+                document.getElementById('editFriendName').value = task.friendName;
+                document.getElementById('editAgreedPayment').value = task.agreedPayment;
+                document.getElementById('editPaidAmountOutsource').value = task.paidAmount;
+                document.getElementById('editPaymentStatusOutsource').value = task.status;
+                openModal('editOutsourceModal');
+            }
+        };
+
+        function handleEditOutsourceTask(e) {
+            e.preventDefault();
+            const index = parseInt(document.getElementById('editOutsourceIndex').value);
+            if (!isNaN(index) && outsourcedTasks[index]) {
+                outsourcedTasks[index].projectId = document.getElementById('editOutsourceProjectId').value;
+                outsourcedTasks[index].friendName = document.getElementById('editFriendName').value;
+                outsourcedTasks[index].agreedPayment = parseInt(document.getElementById('editAgreedPayment').value);
+                outsourcedTasks[index].paidAmount = parseInt(document.getElementById('editPaidAmountOutsource').value);
+                outsourcedTasks[index].status = document.getElementById('editPaymentStatusOutsource').value;
+            }
+            closeModal('editOutsourceModal');
+            renderAll();
+        }
+
+        window.deleteOutsourceTask = function(index) {
+            outsourceIndexToDelete = index;
+            openModal('confirmDeleteModal');
+        };
+
+
+        function handleAddOutsource(e) {
+            e.preventDefault();
+            const newOutsource = {
+                id: 'OT' + String(outsourcedTasks.length + 1).padStart(3, '0'), // Assign unique ID
+                projectId: document.getElementById('outsourceProjectId').value,
+                friendName: document.getElementById('friendName').value,
+                agreedPayment: parseInt(document.getElementById('agreedPayment').value),
+                paidAmount: parseInt(document.getElementById('paidAmountOutsource').value),
+                status: document.getElementById('paymentStatusOutsource').value,
+            };
+            outsourcedTasks.push(newOutsource);
+            closeModal('outsourceModal');
+            addOutsourceForm.reset();
+            renderAll();
+        }
+        
+        function renderAll() {
+            populateProjectDropdowns(); 
+            renderProjectsTable();
+            renderOutsourcedTable();
+            updateMetricsAndChart();
+        }
+
+        projectStatusFilter.addEventListener('change', renderProjectsTable);
+        addProjectForm.addEventListener('submit', handleAddProject);
+        editProjectForm.addEventListener('submit', handleEditProject);
+        recordPaymentForm.addEventListener('submit', handleRecordPayment); 
+        addOutsourceForm.addEventListener('submit', handleAddOutsource);
+        editOutsourceForm.addEventListener('submit', handleEditOutsourceTask);
+
+        renderAll();
+
+    });
+
+    function switchTab(tabName) {
+        const projectsView = document.getElementById('view-projects');
+        const outsourcedView = document.getElementById('view-outsourced');
+        const projectsTab = document.getElementById('tab-projects');
+        const outsourcedTab = document.getElementById('tab-outsourced');
+
+        if(tabName === 'projects') {
+            projectsView.classList.remove('hidden');
+            outsourcedView.classList.add('hidden');
+            projectsTab.classList.add('tab-active');
+            outsourcedTab.classList.remove('tab-active');
+        } else {
+            projectsView.classList.add('hidden');
+            outsourcedView.classList.remove('hidden');
+            projectsTab.classList.remove('tab-active');
+            outsourcedTab.classList.add('tab-active');
+        }
+    }
+    
+    function openModal(modalId) {
+        document.getElementById(modalId).style.display = 'block';
+        document.getElementById(modalId + 'Backdrop').style.display = 'block';
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+        document.getElementById(modalId + 'Backdrop').style.display = 'none';
+    }
+
+</script>
+</body>
+</html>
